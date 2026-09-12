@@ -1,0 +1,11 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Docker / Kafka local state (never commit broker data)
+kafka-data/
+
+# OS
+.DS_Store
