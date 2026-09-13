@@ -39,8 +39,8 @@ def build_producer(bootstrap_servers: str) -> Producer:
         "bootstrap.servers": bootstrap_servers,
         "linger.ms": 20,
         "batch.size": 64 * 1024,
-        "compression.type": "lz4",
-        "acks": "1",
+        "compression.type": "gzip",  # stdlib-only codec, avoids native lz4 dependency issues
+        "acks": "all",  # required when enable.idempotence is True
         "retries": 5,
         "enable.idempotence": True,  # avoids duplicate sends on retry
     }
