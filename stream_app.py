@@ -1,4 +1,4 @@
-"""
+""""
 stream_app.py — Week 2, Project 2 "Stream Forge"
 
 Faust stream topology:
