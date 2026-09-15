@@ -6,7 +6,7 @@ producer is actually working before building the Faust/Bytewax topology in Week 
 
 Usage:
     python verify_consumer.py --max-messages 20
-"""
+""""
 
 import argparse
 import json
