@@ -1,7 +1,7 @@
 version: "3.8"
 
 # Single-node Kafka cluster running in KRaft mode (no Zookeeper needed).
-# Includes Kafka UI so you can visually inspect topics/partitions while developing.
+# Includes Kafka UI so you can visually inspect topic/partitions while developing.
 
 services:
   kafka:
