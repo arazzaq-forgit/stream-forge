@@ -3,7 +3,7 @@
 Goal for this week: spin up a local Kafka cluster and get a high-throughput
 Python producer blasting mock IoT truck telemetry into a topic.
 
-## 1. Start Kafka locally
+### 1. Start Kafka locally
 
 Requires Docker + Docker Compose.
 
@@ -22,7 +22,7 @@ Give it ~15 seconds to finish starting, then check:
 docker compose ps
 ```
 
-## 2. Create the topic
+### 2. Create the topic
 
 ```bash
 docker exec streamforge-kafka kafka-topics --create \
