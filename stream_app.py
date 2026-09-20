@@ -15,7 +15,7 @@ Run with:
     faust -A stream_app worker -l info
 
 This starts a single worker. To simulate multiple parallel workers (as in
-the spec's "20 parallel Python worker nodes"), run this same command in
+the spec's "20 parallel Python worker nodes"), run this at same command in
 several terminals — Faust's consumer group will automatically split the
 topic's partitions across them.
 """
