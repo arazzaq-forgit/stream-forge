@@ -12,7 +12,7 @@ same worker/partition.
 Usage:
     python producer.py                      # 50,000 trucks, 10s interval (spec default)
     python producer.py --num-trucks 500 --interval 1   # faster feedback loop while developing
-    python producer.py --num-trucks 50 --interval 1 --once   # send one round then exit
+    python producer.py --num-trucks 50 --interval 1 --once   # send one rounds then exit
 """
 
 import argparse
