@@ -3,7 +3,7 @@
 Goal for this week: spin up a local Kafka cluster and get a high-throughput
 Python producer blasting mock IoT truck telemetry into a topic.
 
-### 1. Start Kafka locally
+## 1. Start Kafka locally
 
 Requires Docker + Docker Compose.
 
@@ -22,7 +22,7 @@ Give it ~15 seconds to finish starting, then check:
 docker compose ps
 ```
 
-### 2. Create the topic
+## 2. Create the topic
 
 ```bash
 docker exec streamforge-kafka kafka-topics --create \
@@ -176,3 +176,139 @@ Wire the table's changelog to Kafka explicitly, add the mid-project
 throughput audit (100k events/sec), and run the chaos test: kill a worker
 mid-calculation and confirm the rolling average survives via partition
 rebalancing + RocksDB changelog recovery.
+
+---
+
+# Week 3: Throughput Audit & Chaos Testing
+
+Two things this week, matching the spec's Mid-Project Review checklist:
+1. **Performance Audit** — measure actual throughput against the 100k/s target
+2. **Chaos Testing** — kill a worker and prove state survives
+
+## Part 1: Throughput Audit
+
+Make sure Kafka is running (`docker compose up -d`) and no other producer
+is currently flooding the topic (stop `producer.py` if it's running).
+
+```bash
+python benchmark_producer.py --duration 15
+```
+
+This sends messages as fast as the producer physically can (no artificial
+delay) for 15 seconds, then reports sustained throughput.
+
+**Be honest about the number you get.** A single laptop with one Kafka
+broker and 6 partitions realistically will NOT hit 100,000 msgs/sec — the
+original spec's number assumes a proper multi-broker cluster and multiple
+physical worker machines. What matters for the audit is:
+
+- What throughput did you actually achieve?
+- What's the bottleneck? (The script prints likely culprits at the end.)
+- What would you change to get closer to spec, if you had real cluster
+  hardware? (More partitions, more brokers, binary serialization instead
+  of JSON, `acks=1` instead of `acks=all`, etc.)
+
+This kind of grounded, bottleneck-aware analysis is worth more in an
+interview than a suspiciously round "yep, hit 100k" claim.
+
+## Part 1b: Consumer-side throughput (the other half of the audit)
+
+`stream_app.py` now includes a built-in throughput counter that reports
+every 5 seconds — this measures how fast the Faust worker itself can
+actually pull messages off Kafka and run them through filter → map →
+windowed aggregation, which is a separate number from how fast the
+producer can write.
+
+```bash
+# Terminal 1: Kafka already running
+# Terminal 2:
+python benchmark_producer.py --duration 30
+
+# Terminal 3 (start this just before or during the benchmark):
+faust -A stream_app worker -l info
+```
+
+Watch for lines like:
+
+```
+CONSUMER THROUGHPUT: 48213 messages in 5.0s = 9642 msgs/s
+```
+
+**Compare this against your producer-side number.** If producer throughput
+was, say, 136,000 msgs/s but consumer throughput is only ~10,000 msgs/s,
+that gap is the real story: Kafka can absorb writes far faster than a
+single Python worker can deserialize JSON and update windowed state for
+each one. This is exactly why the spec calls for "20 parallel Python
+worker nodes" — one worker alone isn't meant to keep up at full scale.
+Try running 2-3 Faust workers at once (see Part 2 below for how) and
+watch the aggregate consumer throughput across all of them climb as work
+spreads across partitions.
+
+## Part 2: Chaos Testing (partition rebalancing + state recovery)
+
+This proves the spec's core distributed-systems claim: *"If Worker Node #4
+crashes, StreamForge automatically rebalances the partition to Worker #5
+and recovers its state from a RocksDB changelog, ensuring no sensor
+reading is ever dropped or processed twice."*
+
+**Setup — you'll need 4 terminals open:**
+
+1. Producer: `python producer.py --num-trucks 500 --interval 1`
+2. Faust worker A: `faust -A stream_app worker -l info --web-port 6066`
+3. Faust worker B: `faust -A stream_app worker -l info --web-port 6067`
+   (different `--web-port` since both workers can't share one)
+4. Free terminal for running commands / watching Kafka UI
+
+**Steps:**
+
+1. Start the producer, then both Faust workers. Watch the logs — Faust's
+   consumer group will split the 6 partitions across the two workers
+   (e.g. worker A gets partitions 0-2, worker B gets 3-5). You'll see this
+   in the "Setting newly assigned partitions" log line on each worker.
+
+2. Let it run for a couple minutes so both workers accumulate real rolling
+   averages for different trucks (check the logs for `rolling_avg` lines
+   from each worker — they should be processing *different* truck IDs,
+   proof the partitioning is working).
+
+3. **Kill worker B** — go to its terminal and press `Ctrl+C`, or for a
+   harsher (more realistic "crash") test, find its process ID and
+   `kill -9 <pid>` instead of a graceful shutdown.
+
+4. **Watch worker A's terminal.** Within a few seconds you should see log
+   lines about "Rebalancing", "Revoking previously assigned partitions",
+   and then worker A picking up worker B's old partitions
+   ("Setting newly assigned partitions" showing all 6 now).
+
+5. **Check recovery**: once worker A takes over the extra partitions, look
+   for `[^---Recovery]: Restore complete!` in its logs — this is Faust
+   replaying the RocksDB changelog topic to rebuild state for the trucks
+   it just inherited, rather than starting their rolling averages from
+   zero.
+
+6. **Verify with the debug endpoint** — hit a truck ID that was previously
+   owned by the killed worker:
+   ```bash
+   curl http://localhost:6066/truck/truck-00042/
+   ```
+   If the `samples` count and `rolling_avg` look continuous (not reset to
+   1 sample), that's your proof: state survived the crash.
+
+## Design notes
+
+- **Why `acks=all` matters here**: it's what makes the idempotent producer
+  safe against duplicate sends during a broker hiccup — directly relevant
+  to the spec's "no sensor reading is ever... processed twice" claim.
+- **RocksDB changelog topic**: Faust automatically created
+  `stream-forge-rolling-temp-by-truck-changelog` — every table update is
+  also written there. This is what a surviving worker replays to rebuild
+  a crashed worker's state, instead of that data being gone forever.
+- **Graceful vs. hard kill**: `Ctrl+C` lets Faust leave the consumer group
+  cleanly (faster rebalance). `kill -9` simulates a real crash — Kafka has
+  to wait for a session timeout before reassigning partitions, which is a
+  more realistic (and slower) test of the recovery path.
+
+## Next up (Week 4)
+
+Multi-stream orchestration with asyncio, Prometheus metrics export, and
+polishing the telemetry dashboard.

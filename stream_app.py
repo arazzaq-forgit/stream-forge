@@ -20,6 +20,8 @@ several terminals — Faust's consumer group will automatically split the
 topic's partitions across them.
 """
 
+import time
+
 import faust
 
 # --- App & topic setup -------------------------------------------------
@@ -42,6 +44,35 @@ class TruckReading(faust.Record, serializer="json"):
 
 
 truck_telemetry_topic = app.topic("truck-telemetry", value_type=TruckReading)
+
+
+# --- Consumer-side throughput measurement (Week 3 audit) ---------------
+#
+# The producer-side benchmark (benchmark_producer.py) only proves how fast
+# Kafka can ingest writes. This counter measures the other half: how fast
+# THIS worker can actually pull messages off the topic and run them
+# through filter -> map -> windowed aggregation. On a single machine, this
+# number will typically be meaningfully lower than raw producer throughput
+# — that gap IS the interesting result for the audit.
+
+_processed_count = 0
+_counter_window_start = time.monotonic()
+
+
+@app.timer(interval=5.0)
+async def report_consumer_throughput():
+    """Runs every 5 seconds regardless of message flow; prints the
+    consumer-side processing rate over that window."""
+    global _processed_count, _counter_window_start
+    now = time.monotonic()
+    elapsed = now - _counter_window_start
+    rate = _processed_count / elapsed if elapsed > 0 else 0.0
+    app.logger.info(
+        "CONSUMER THROUGHPUT: %d messages in %.1fs = %.0f msgs/s",
+        _processed_count, elapsed, rate,
+    )
+    _processed_count = 0
+    _counter_window_start = now
 
 
 # --- Windowed table for the rolling average -----------------------------
@@ -73,6 +104,9 @@ async def process_truck_readings(readings):
     us as messages arrive on our assigned partitions.
     """
     async for reading in readings:
+        global _processed_count
+        _processed_count += 1
+
         # --- Filter: drop clearly-bad sensor readings ---
         # Spec: "Consume -> Filter (Temp > 0) -> Map"
         if reading.temperature_c <= 0:
@@ -94,14 +128,13 @@ async def process_truck_readings(readings):
 
         rolling_avg = sum(current_bucket) / len(current_bucket)
 
-        app.logger.info(
+        app.logger.debug(
             "truck=%s latest=%.1f°C rolling_avg(5min)=%.2f°C samples=%d",
             reading.truck_id, mapped_temp, rolling_avg, len(current_bucket),
         )
 
 
-# --- Debug/inspection endpoint ------
-# ------------------------------------
+# --- Debug/inspection endpoint ------------------------------------------
 #
 # Faust apps can also expose a small web server. This is a convenience
 # route for manually checking a truck's current rolling average without
