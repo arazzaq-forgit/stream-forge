@@ -2,7 +2,7 @@
 producer.py — Week 1, Project 2 "Stream Forge"
 
 Simulates a fleet of IoT trucks sending temperature telemetry into Kafka.
-Each truck sends one reading roughly every `--interval` seconds. Messages
+Each truck sends one reading roughly every `--interval` seconds. Message
 are keyed by truck_id so that Kafka's default partitioner routes all of a
 given truck's readings to the same partition — this matters later (Week 2+)
 when we do per-truck windowed aggregation, since a stream processor can
