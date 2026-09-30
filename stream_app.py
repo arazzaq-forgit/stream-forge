@@ -351,7 +351,7 @@ async def dashboard_data(
 
     for truck_id in sorted(
         _active_trucks
-    )[:50]:
+    )[:500]:
 
         bucket = (
             rolling_temp_table[
@@ -375,7 +375,7 @@ async def dashboard_data(
             )
 
     if not trucks:
-        trucks = list(_truck_stats.values())[:50]
+        trucks = list(_truck_stats.values())[:500]
 
     trucks.sort(
         key=lambda truck: truck["rolling_avg"],
@@ -562,15 +562,19 @@ setInterval(refreshDashboard, 2000);
 # DASHBOARD ROUTE
 # ============================================================
 
+def _load_dashboard():
+    from pathlib import Path
+    f = Path(__file__).with_name("dashboard.html")
+    return f.read_text(encoding="utf-8") if f.exists() else _DASHBOARD_HTML
+
+
 @app.page("/dashboard")
 async def dashboard(
     web,
     request,
 ):
 
-    return web.html(
-        _DASHBOARD_HTML
-    )
+    return web.html(_load_dashboard())
 
 
 # ============================================================

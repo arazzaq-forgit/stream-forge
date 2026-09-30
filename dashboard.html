@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream Forge — Fleet Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b111d;--panel:#111a2b;--line:#1f2b42;--tx:#e8eefb;--mut:#8592ad;--acc:#38bdf8;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--hover:#16223a}
+[data-theme=light]{--bg:#f4f6fb;--panel:#fff;--line:#dfe5f0;--tx:#0f1a2e;--mut:#5d6b86;--acc:#0284c7;--ok:#059669;--warn:#b45309;--bad:#dc2626;--hover:#eef3fb}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:500 14px/1.45 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding:0 28px 48px}
+header{display:flex;align-items:center;gap:16px;padding:20px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.brand svg{width:34px;height:34px}
+.brand b{font-size:19px;font-weight:800;letter-spacing:-.02em;display:block}
+.brand span{color:var(--mut);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-weight:700;font-size:12px;background:var(--panel)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+.pill.live .dot{background:var(--ok);animation:pulse 1.6s infinite}
+.pill.off .dot{background:var(--bad)}
+.pill.paused .dot{background:var(--warn)}
+@keyframes pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.pill.live .dot{animation:none}}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 13px;font-weight:600;font-size:13px}
+.btn:hover{background:var(--hover)}
+.stats{display:grid;grid-template-columns:1.5fr repeat(4,1fr);border-bottom:1px solid var(--line)}
+.stat{padding:22px 22px 20px 0;margin-right:22px;border-right:1px solid var(--line);min-width:0}
+.stat:last-child{border-right:0;margin-right:0}
+.stat label{color:var(--mut);font-size:12px;font-weight:600;display:block}
+.stat .v{font-size:30px;font-weight:800;letter-spacing:-.03em;margin-top:4px;line-height:1.1}
+.stat.big .v{font-size:46px}
+.stat small{color:var(--mut);font-size:12px;display:block;margin-top:4px}
+.stat svg{display:block;width:100%;height:34px;margin-top:8px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.sec{padding:26px 0 0}
+.sec h2{font-size:15px;font-weight:700;margin:0 0 14px;display:flex;align-items:baseline;gap:12px}
+.sec h2 small{color:var(--mut);font-weight:500;font-size:12px}
+.flow{display:flex;align-items:stretch}
+.stage{flex:1;padding:12px 14px;border:1px solid var(--line);background:var(--panel);min-width:0}
+.stage:first-child{border-radius:10px 0 0 10px}
+.stage:last-child{border-radius:0 10px 10px 0}
+.stage+.stage{border-left:0;position:relative}
+.stage b{display:block;font-size:13px}
+.stage span{color:var(--mut);font-size:12px}
+.stage .n{display:block;font-style:normal;margin-top:6px;font-size:16px;font-weight:700;color:var(--acc)}
+.stage.rej .n{color:var(--warn)}
+.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:4px}
+.cell{aspect-ratio:1;border:0;border-radius:5px;padding:0;transition:transform .12s}
+.cell:hover{transform:scale(1.25);z-index:2}
+.cell.hot{box-shadow:0 0 0 2px var(--bad)}
+.scale{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--mut);font-size:12px}
+.scale i{flex:0 0 180px;height:8px;border-radius:4px;background:linear-gradient(90deg,hsl(210 75% 52%),hsl(120 75% 45%),hsl(60 75% 50%),hsl(0 75% 52%))}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.chart svg{width:100%;height:150px;display:block;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.chart .cap{display:flex;justify-content:space-between;color:var(--mut);font-size:12px;margin-bottom:8px}
+.tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.tools input[type=search],.tools input[type=number]{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+.tools input[type=search]{width:240px}
+.tools input[type=number]{width:70px}
+.tools .sp{margin-left:auto;color:var(--mut);font-size:12px}
+.tw{border:1px solid var(--line);border-radius:10px;overflow:auto;background:var(--panel);max-height:560px}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{position:sticky;top:0;background:var(--panel);text-align:left;padding:11px 16px;font-size:12px;color:var(--mut);font-weight:600;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:var(--tx)}
+th.on{color:var(--acc)}
+td{padding:11px 16px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--hover)}
+tr.alert td:first-child{box-shadow:inset 3px 0 var(--bad)}
+.bar{display:inline-block;width:90px;height:6px;background:var(--line);border-radius:3px;vertical-align:middle;margin-left:10px;overflow:hidden}
+.bar i{display:block;height:100%}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad);margin-left:8px}
+.empty{text-align:center;color:var(--mut);padding:44px 16px}
+footer{color:var(--mut);font-size:12px;padding-top:26px}
+#tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;display:none;z-index:9}
+@media(max-width:1000px){.stats{grid-template-columns:1fr 1fr}.stat{border-right:0;border-bottom:1px solid var(--line);margin:0}.charts{grid-template-columns:1fr}.flow{flex-direction:column}.stage,.stage:first-child,.stage:last-child{border-radius:0;border-left:1px solid var(--line)}.stage+.stage{border-top:0}}
+@media(max-width:560px){.wrap{padding:0 16px 36px}.stats{grid-template-columns:1fr}.tools input[type=search]{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" fill="#0ea5e9"/><path d="M7 22h7l3-9 4 13 3-8h3" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div><b>Stream Forge</b><span>Live fleet temperature monitoring</span></div>
+  </div>
+  <span class="pill" id="status"><i class="dot"></i><span id="stxt">Connecting</span></span>
+  <button class="btn" id="pause">Pause</button>
+  <button class="btn" id="csv">Export CSV</button>
+  <button class="btn" id="theme" aria-label="Toggle light or dark theme">Light mode</button>
+</header>
+
+<section class="stats" aria-label="Key numbers">
+  <div class="stat big"><label>Throughput</label><div class="v mono" id="s-tp">0</div><small>messages per second</small><svg id="sp-tp" viewBox="0 0 200 34" preserveAspectRatio="none"></svg></div>
+  <div class="stat"><label>Processing lag</label><div class="v mono" id="s-lag">0</div><small id="s-lagt">seconds behind</small></div>
+  <div class="stat"><label>Active trucks</label><div class="v mono" id="s-act">0</div><small>reporting to this worker</small></div>
+  <div class="stat"><label>Events processed</label><div class="v mono" id="s-pro">0</div><small id="s-rate">since worker start</small></div>
+  <div class="stat"><label>Fleet average</label><div class="v mono" id="s-avg">–</div><small id="s-rng">5-minute window</small></div>
+</section>
+
+<section class="sec" aria-label="Pipeline">
+  <h2>Pipeline <small>Every reading passes through these stages</small></h2>
+  <div class="flow">
+    <div class="stage"><b>Consume</b><span>Kafka topic truck-telemetry</span><em class="n mono" id="p1">0</em></div>
+    <div class="stage rej"><b>Filter</b><span>Drops temperature of 0 or below</span><em class="n mono" id="p2">0 dropped</em></div>
+    <div class="stage"><b>Map</b><span>Rounds to 0.1 °C</span><em class="n mono" id="p3">0</em></div>
+    <div class="stage"><b>Window</b><span>5-minute tumbling, per truck</span><em class="n mono" id="p4">0 trucks</em></div>
+    <div class="stage"><b>Average</b><span>Rolling mean stored in RocksDB</span><em class="n mono" id="p5">–</em></div>
+  </div>
+</section>
+
+<section class="sec" aria-label="Fleet heat map">
+  <h2>Fleet heat map <small id="heat-sub">Each square is one truck. Click a square to filter the table.</small></h2>
+  <div class="heat" id="heat"></div>
+  <div class="scale"><span>Cold</span><i></i><span>Hot</span><span style="margin-left:auto">Red outline means over the alert limit</span></div>
+</section>
+
+<section class="sec charts" aria-label="Trends">
+  <div class="chart"><div class="cap"><b style="color:var(--tx)">Throughput</b><span id="c1-r">msgs/s, last 3 minutes</span></div><svg id="c1" viewBox="0 0 400 150" preserveAspectRatio="none"></svg></div>
+  <div class="chart"><div class="cap"><b style="color:var(--tx)">Processing lag</b><span id="c2-r">seconds, last 3 minutes</span></div><svg id="c2" viewBox="0 0 400 150" preserveAspectRatio="none"></svg></div>
+</section>
+
+<section class="sec" aria-label="Trucks">
+  <h2>Trucks <small id="tcount"></small></h2>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search truck ID" aria-label="Search truck ID">
+    <label>Alert above <input type="number" id="th" value="35" min="-20" max="80" step="1"> °C</label>
+    <span class="sp" id="upd">Waiting for data</span>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th data-k="truck_id">Truck</th><th data-k="latest">Latest reading</th><th data-k="rolling_avg">5-minute average</th><th data-k="delta">Change</th><th data-k="samples">Samples</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="5" class="empty">Connecting to the stream worker…</td></tr></tbody>
+  </table></div>
+</section>
+<footer>Kafka · Faust · RocksDB · Prometheus metrics at /metrics</footer>
+</div>
+<div id="tip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const S = {paused:false, rows:[], prevAvg:{}, sort:{k:"rolling_avg", d:-1}, q:"", th:35, tp:[], lag:[], prev:null};
+const MAXPTS = 90;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
+const heat = t => `hsl(${Math.round(210 - 210 * Math.min(1, Math.max(0, (t - 15) / 25)))} 75% 50%)`;
+
+function setStatus(kind, text){
+  const el = $("#status"); el.className = "pill " + kind; $("#stxt").textContent = text;
+}
+
+function spark(id, data, color){
+  const el = $(id); if (data.length < 2) { el.innerHTML = ""; return; }
+  const w = el.viewBox.baseVal.width, h = el.viewBox.baseVal.height, pad = 4;
+  const max = Math.max(...data, 1), min = Math.min(...data, 0), span = (max - min) || 1;
+  const pts = data.map((v, i) => [i / (data.length - 1) * w, h - pad - (v - min) / span * (h - pad * 2)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  el.innerHTML = `<path d="${line}L${w} ${h}L0 ${h}Z" fill="${color}" opacity=".15"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+}
+
+function chart(id, data, color, rangeId, unit){
+  const el = $(id); if (data.length < 2) { el.innerHTML = ""; return; }
+  const w = 400, h = 150, top = 14, bot = 10;
+  const max = Math.max(Math.max(...data) * 1.15, id === "#c2" ? 5 : 1);
+  const pts = data.map((v, i) => [i / (data.length - 1) * w, h - bot - v / max * (h - top - bot)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  let grid = "";
+  for (let i = 1; i < 4; i++) grid += `<line x1="0" x2="${w}" y1="${top + (h - top - bot) * i / 4}" y2="${top + (h - top - bot) * i / 4}" stroke="currentColor" opacity=".08"/>`;
+  el.innerHTML = grid + `<path d="${line}L${w} ${h}L0 ${h}Z" fill="${color}" opacity=".16"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke"/>`;
+  $(rangeId).textContent = `now ${data[data.length - 1].toFixed(1)}, peak ${Math.max(...data).toFixed(1)} ${unit}`;
+}
+
+function ingest(d){
+  const now = Date.now();
+  if (S.prev) {
+    const dt = (now - S.prev.t) / 1000;
+    if (dt > 0) S.tp.push(Math.max(0, (d.events_processed - S.prev.e) / dt));
+  }
+  S.prev = {t: now, e: d.events_processed};
+  S.lag.push(d.processing_lag_seconds);
+  if (S.tp.length > MAXPTS) S.tp.shift();
+  if (S.lag.length > MAXPTS) S.lag.shift();
+  S.rows.forEach(r => S.prevAvg[r.truck_id] = r.rolling_avg);
+  S.rows = (d.trucks || []).map(t => ({...t, delta: t.truck_id in S.prevAvg ? t.rolling_avg - S.prevAvg[t.truck_id] : 0}));
+  S.d = d;
+  $("#upd").textContent = "Updated " + new Date().toLocaleTimeString();
+  renderAll();
+}
+
+function renderAll(){
+  const d = S.d; if (!d) return;
+  const tp = S.tp.length ? S.tp[S.tp.length - 1] : 0;
+  $("#s-tp").textContent = fmt(tp);
+  const lag = d.processing_lag_seconds;
+  const lagEl = $("#s-lag"), lt = $("#s-lagt");
+  lagEl.textContent = lag.toFixed(1);
+  const state = lag < 5 ? ["ok", "Real-time"] : lag < 60 ? ["warn", "Catching up"] : ["bad", "Working through a backlog"];
+  lagEl.className = "v mono " + state[0]; lt.textContent = state[1];
+  $("#s-act").textContent = fmt(d.active_trucks);
+  $("#s-pro").textContent = fmt(d.events_processed);
+  const passed = d.events_processed - d.events_filtered;
+  $("#p1").textContent = fmt(d.events_processed);
+  $("#p2").textContent = fmt(d.events_filtered) + " dropped";
+  $("#p3").textContent = fmt(passed);
+  $("#p4").textContent = fmt(d.active_trucks) + " trucks";
+  const avgs = S.rows.map(r => r.rolling_avg);
+  const fleet = avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : null;
+  $("#s-avg").textContent = fleet === null ? "–" : fleet.toFixed(1) + " °C";
+  $("#p5").textContent = fleet === null ? "–" : fleet.toFixed(1) + " °C fleet";
+  $("#s-rng").textContent = avgs.length ? `${Math.min(...avgs).toFixed(1)} to ${Math.max(...avgs).toFixed(1)} °C across ${avgs.length} trucks` : "5-minute window";
+  spark("#sp-tp", S.tp, "var(--acc)");
+  chart("#c1", S.tp, "#38bdf8", "#c1-r", "msgs/s");
+  chart("#c2", S.lag, lag < 5 ? "#34d399" : lag < 60 ? "#fbbf24" : "#f87171", "#c2-r", "s");
+  renderHeat();
+  renderTable();
+}
+
+function renderHeat(){
+  const rows = [...S.rows].sort((a, b) => a.truck_id.localeCompare(b.truck_id));
+  $("#heat").innerHTML = rows.length ? rows.map(r =>
+    `<button class="cell${r.rolling_avg > S.th ? " hot" : ""}" style="background:${heat(r.rolling_avg)}" data-id="${esc(r.truck_id)}" data-tip="${esc(r.truck_id)}: ${r.rolling_avg.toFixed(1)} °C average" aria-label="${esc(r.truck_id)} ${r.rolling_avg.toFixed(1)} degrees"></button>`).join("")
+    : '<div class="empty" style="grid-column:1/-1">No trucks yet. Start the producer to see them appear here.</div>';
+  const shown = S.d.active_trucks > rows.length ? ` Showing the first ${rows.length} of ${fmt(S.d.active_trucks)} trucks.` : "";
+  $("#heat-sub").textContent = "Each square is one truck. Click a square to filter the table." + shown;
+}
+
+function renderTable(){
+  const {k, d} = S.sort, q = S.q.toLowerCase();
+  let rows = S.rows.filter(r => r.truck_id.toLowerCase().includes(q));
+  rows.sort((a, b) => (typeof a[k] === "string" ? a[k].localeCompare(b[k]) : a[k] - b[k]) * d);
+  const over = S.rows.filter(r => r.rolling_avg > S.th).length;
+  $("#tcount").textContent = `${rows.length} shown, ${over} over ${S.th} °C`;
+  document.querySelectorAll("th").forEach(th => th.classList.toggle("on", th.dataset.k === k));
+  $("#rows").innerHTML = rows.length ? rows.map(r => {
+    const hot = r.rolling_avg > S.th;
+    const pct = Math.min(100, Math.max(0, r.rolling_avg / 50 * 100));
+    const dl = Math.abs(r.delta) < 0.05 ? '<span style="color:var(--mut)">steady</span>' : r.delta > 0 ? `<span class="bad">▲ ${r.delta.toFixed(2)}</span>` : `<span style="color:var(--acc)">▼ ${Math.abs(r.delta).toFixed(2)}</span>`;
+    return `<tr class="${hot ? "alert" : ""}"><td><b>${esc(r.truck_id)}</b>${hot ? '<span class="tag">Over limit</span>' : ""}</td><td class="mono">${Number(r.latest).toFixed(1)} °C</td><td class="mono">${r.rolling_avg.toFixed(2)} °C<span class="bar"><i style="width:${pct}%;background:${heat(r.rolling_avg)}"></i></span></td><td class="mono">${dl}</td><td class="mono">${r.samples}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">${S.rows.length ? "No truck matches that search." : "No truck data yet. Start the producer and readings will appear within seconds."}</td></tr>`;
+}
+
+async function poll(){
+  if (S.paused) return;
+  try {
+    const r = await fetch("/dashboard-data");
+    if (!r.ok) throw new Error(r.status);
+    ingest(await r.json());
+    setStatus("live", "Live");
+  } catch (e) {
+    setStatus("off", "Worker unreachable");
+    $("#upd").textContent = "Cannot reach /dashboard-data. Is the worker running?";
+  }
+}
+
+$("#pause").onclick = () => {
+  S.paused = !S.paused;
+  $("#pause").textContent = S.paused ? "Resume" : "Pause";
+  if (S.paused) setStatus("paused", "Paused"); else { S.prev = null; poll(); }
+};
+$("#theme").onclick = () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+  $("#theme").textContent = light ? "Dark mode" : "Light mode";
+  try { localStorage.setItem("sf-theme", light ? "light" : "dark"); } catch (e) {}
+};
+$("#q").oninput = e => { S.q = e.target.value; renderTable(); };
+$("#th").oninput = e => { S.th = Number(e.target.value) || 0; if (S.d) { renderHeat(); renderTable(); } };
+document.querySelectorAll("th").forEach(th => th.onclick = () => {
+  const k = th.dataset.k; S.sort = {k, d: S.sort.k === k ? -S.sort.d : (k === "truck_id" ? 1 : -1)}; renderTable();
+});
+$("#heat").onclick = e => { const b = e.target.closest(".cell"); if (b) { $("#q").value = b.dataset.id; S.q = b.dataset.id; renderTable(); $("#q").scrollIntoView({behavior:"smooth", block:"center"}); } };
+const tip = $("#tip");
+$("#heat").onmousemove = e => { const b = e.target.closest(".cell"); if (!b) { tip.style.display = "none"; return; } tip.textContent = b.dataset.tip; tip.style.display = "block"; tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 14 + "px"; };
+$("#heat").onmouseleave = () => tip.style.display = "none";
+$("#csv").onclick = () => {
+  const lines = ["truck_id,latest_c,rolling_avg_c,samples"].concat(S.rows.map(r => [r.truck_id, r.latest, r.rolling_avg, r.samples].join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type:"text/csv"}));
+  a.download = "stream-forge-trucks.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+
+try { if (localStorage.getItem("sf-theme") === "light") { document.documentElement.dataset.theme = "light"; $("#theme").textContent = "Dark mode"; } } catch (e) {}
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>
