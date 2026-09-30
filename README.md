@@ -312,3 +312,18 @@ reading is ever dropped or processed twice."*
 
 Multi-stream orchestration with asyncio, Prometheus metrics export, and
 polishing the telemetry dashboard.
+## Chaos Test Results (2026-09-30)
+
+Setup: 2 Faust workers in the same consumer group (`truck-telemetry`, 6 partitions), producer at 200 trucks every 2s (~100 msgs/s). Each worker had its own RocksDB data directory (`--datadir`).
+
+| Event | Result |
+|---|---|
+| Worker 2 joins | Kafka rebalances, partitions split 3/3 |
+| Worker 2 fresh-start recovery | Rebuilt partitions 0-2 from the changelog topic in ~104s (empty data dir) |
+| Worker 2 killed with `kill -9` at 08:42:55 | Kafka detected the failure at 08:43:55 (60s session timeout) |
+| Failover | Worker 1 was assigned all 6 partitions |
+| Worker 1 state recovery | Under 1s, because it already held standby copies of the state |
+| Catch-up | Throughput rose to ~415-441 msgs/s for ~10s to drain the backlog, then returned to the ~100 msgs/s steady rate |
+| Data loss | None observed |
+
+Note: two workers on one machine need separate `--datadir` values, otherwise RocksDB fails with a file-lock error.
