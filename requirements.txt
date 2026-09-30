@@ -1,2 +1,6 @@
 confluent-kafka==2.5.3
 faust-streaming==0.15.3
+prometheus-client
+requests
+rocksdict
+lz4

@@ -10,3 +10,6 @@ kafka-data/
 # OS
 .DS_Store
 stream-forge-data/
+stream-forge-data.old/
+*.save
+*.bak
