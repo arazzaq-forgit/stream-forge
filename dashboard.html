@@ -83,6 +83,24 @@ footer{color:var(--mut);font-size:12px;padding-top:26px}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:5px 9px;border-radius:6px;font-size:12px;display:none;z-index:9}
 @media(max-width:1000px){.stats{grid-template-columns:1fr 1fr}.stat{border-right:0;border-bottom:1px solid var(--line);margin:0}.charts{grid-template-columns:1fr}.flow{flex-direction:column}.stage,.stage:first-child,.stage:last-child{border-radius:0;border-left:1px solid var(--line)}.stage+.stage{border-top:0}}
 @media(max-width:560px){.wrap{padding:0 16px 36px}.stats{grid-template-columns:1fr}.tools input[type=search]{width:100%}}
+.flow{position:relative}
+.flow::after{content:"";position:absolute;left:0;bottom:-1px;height:2px;width:90px;background:linear-gradient(90deg,transparent,var(--acc),transparent);animation:run 2.6s linear infinite}
+@keyframes run{from{left:-90px}to{left:100%}}
+@media(prefers-reduced-motion:reduce){.flow::after{animation:none}}
+.g3{display:grid;grid-template-columns:1fr 270px;gap:24px}
+#g3d{height:400px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:grab;overflow:hidden}
+#g3d:active{cursor:grabbing}
+#g3d canvas{display:block;width:100%;height:100%}
+.ins{display:flex;flex-direction:column;gap:12px}
+.ringsvg{width:150px;height:150px}
+.ins p{margin:0;color:var(--mut);font-size:13px}
+.ins dl{margin:8px 0 0;display:grid;gap:2px}
+.ins dt{color:var(--mut);font-size:12px;margin-top:10px}
+.ins dd{margin:0;font-weight:700}
+#toasts{position:fixed;right:20px;bottom:20px;display:grid;gap:8px;z-index:20}
+.toast{background:var(--panel);border:1px solid var(--bad);border-left-width:4px;border-radius:8px;padding:10px 14px;font-weight:600;font-size:13px;box-shadow:0 8px 24px #0006;animation:in .3s ease-out}
+@keyframes in{from{transform:translateX(30px);opacity:0}}
+@media(max-width:1000px){.g3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -123,6 +141,18 @@ footer{color:var(--mut);font-size:12px;padding-top:26px}
   <div class="scale"><span>Cold</span><i></i><span>Hot</span><span style="margin-left:auto">Red outline means over the alert limit</span></div>
 </section>
 
+<section class="sec" id="sec3d" aria-label="Fleet in 3D">
+  <h2>Fleet in 3D <small>Column height is each truck's 5-minute average. Drag to rotate.</small></h2>
+  <div class="g3">
+    <div id="g3d"></div>
+    <aside class="ins">
+      <svg class="ringsvg" viewBox="0 0 100 100" role="img" aria-label="Share of trucks within limit"><circle cx="50" cy="50" r="42" fill="none" stroke="var(--line)" stroke-width="9"/><circle id="ring" cx="50" cy="50" r="42" fill="none" stroke="var(--ok)" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 263.9" transform="rotate(-90 50 50)" style="transition:stroke-dasharray .6s"/><text id="ringv" x="50" y="57" text-anchor="middle" font-size="22" font-weight="800" fill="currentColor">–</text></svg>
+      <p>of trucks are at or under the alert limit</p>
+      <dl><dt>Hottest truck</dt><dd id="i-hot" class="mono">–</dd><dt>Rising fastest</dt><dd id="i-rise" class="mono">–</dd><dt>Coolest truck</dt><dd id="i-cool" class="mono">–</dd></dl>
+    </aside>
+  </div>
+</section>
+
 <section class="sec charts" aria-label="Trends">
   <div class="chart"><div class="cap"><b style="color:var(--tx)">Throughput</b><span id="c1-r">msgs/s, last 3 minutes</span></div><svg id="c1" viewBox="0 0 400 150" preserveAspectRatio="none"></svg></div>
   <div class="chart"><div class="cap"><b style="color:var(--tx)">Processing lag</b><span id="c2-r">seconds, last 3 minutes</span></div><svg id="c2" viewBox="0 0 400 150" preserveAspectRatio="none"></svg></div>
@@ -142,8 +172,10 @@ footer{color:var(--mut);font-size:12px;padding-top:26px}
 </section>
 <footer>Kafka · Faust · RocksDB · Prometheus metrics at /metrics</footer>
 </div>
+<div id="toasts" aria-live="polite"></div>
 <div id="tip"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const S = {paused:false, rows:[], prevAvg:{}, sort:{k:"rolling_avg", d:-1}, q:"", th:35, tp:[], lag:[], prev:null};
@@ -220,6 +252,7 @@ function renderAll(){
   chart("#c2", S.lag, lag < 5 ? "#34d399" : lag < 60 ? "#fbbf24" : "#f87171", "#c2-r", "s");
   renderHeat();
   renderTable();
+  fleet3d(); insights(); toasts();
 }
 
 function renderHeat(){
@@ -287,6 +320,89 @@ $("#csv").onclick = () => {
 };
 
 try { if (localStorage.getItem("sf-theme") === "light") { document.documentElement.dataset.theme = "light"; $("#theme").textContent = "Dark mode"; } } catch (e) {}
+let T = null;
+function init3d(){
+  const box = $("#g3d");
+  try {
+    const R = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    R.setPixelRatio(Math.min(devicePixelRatio, 2)); box.appendChild(R.domElement);
+    const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(42, 1, .1, 200);
+    sc.add(new THREE.AmbientLight(0xffffff, .7));
+    const L = new THREE.DirectionalLight(0xffffff, .9); L.position.set(10, 20, 12); sc.add(L);
+    sc.add(new THREE.GridHelper(44, 22, 0x475569, 0x334155));
+    const g = new THREE.Group(); sc.add(g);
+    T = {R, sc, cam, g, bars:[], rx:.95, ry:.6, drag:false};
+    new ResizeObserver(() => { const w = box.clientWidth, h = box.clientHeight; R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }).observe(box);
+    const ray = new THREE.Raycaster(), mv = new THREE.Vector2();
+    box.onpointerdown = () => T.drag = true;
+    addEventListener("pointerup", () => { if (T) T.drag = false; });
+    box.onpointerleave = () => tip.style.display = "none";
+    box.onpointermove = e => {
+      if (T.drag) { T.ry -= e.movementX * .008; T.rx = Math.min(1.5, Math.max(.25, T.rx - e.movementY * .006)); return; }
+      const rc = box.getBoundingClientRect();
+      mv.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
+      ray.setFromCamera(mv, cam);
+      const hit = ray.intersectObjects(g.children.filter(o => o.visible))[0];
+      const b = hit && T.bars.find(x => x.m === hit.object);
+      if (b) { tip.textContent = b.id + ": " + b.avg.toFixed(1) + " °C average"; tip.style.display = "block"; tip.style.left = e.clientX + 14 + "px"; tip.style.top = e.clientY + 14 + "px"; } else tip.style.display = "none";
+    };
+    loop();
+  } catch (err) { T = null; $("#sec3d").style.display = "none"; }
+}
+function loop(){
+  requestAnimationFrame(loop);
+  if (!T) return;
+  if (!T.drag) T.ry += .003;
+  const d = 34, p = T.rx, t = T.ry;
+  T.cam.position.set(d * Math.sin(p) * Math.sin(t), d * Math.cos(p), d * Math.sin(p) * Math.cos(t));
+  T.cam.lookAt(0, 2, 0);
+  T.bars.forEach(b => { b.h += (b.th - b.h) * .08; b.m.scale.y = Math.max(b.h, .05); b.m.position.y = b.h / 2; });
+  T.R.render(T.sc, T.cam);
+}
+function fleet3d(){
+  if (!T) return;
+  const rows = [...S.rows].sort((a, b) => a.truck_id.localeCompare(b.truck_id)), n = rows.length, cols = Math.ceil(Math.sqrt(n * 1.8));
+  while (T.bars.length < n) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial());
+    m.scale.x = m.scale.z = .85; T.g.add(m); T.bars.push({m, h:0, th:0, id:"", avg:0});
+  }
+  T.bars.forEach((b, i) => {
+    const r = rows[i]; b.m.visible = !!r; if (!r) return;
+    b.id = r.truck_id; b.avg = r.rolling_avg; b.th = Math.max(.2, (r.rolling_avg - 10) * .32);
+    b.m.material.color.setHSL((210 - 210 * Math.min(1, Math.max(0, (r.rolling_avg - 15) / 25))) / 360, .75, .5);
+    b.m.material.emissive.setHex(r.rolling_avg > S.th ? 0x661111 : 0);
+    b.m.position.x = (i % cols - (cols - 1) / 2) * 1.1;
+    b.m.position.z = (Math.floor(i / cols) - (Math.ceil(n / cols) - 1) / 2) * 1.1;
+  });
+}
+function insights(){
+  const r = S.rows; if (!r.length) return;
+  const pct = r.filter(x => x.rolling_avg <= S.th).length / r.length * 100;
+  const ring = $("#ring"); ring.setAttribute("stroke-dasharray", (pct * 2.639).toFixed(1) + " 263.9");
+  ring.setAttribute("stroke", pct >= 90 ? "#34d399" : pct >= 70 ? "#fbbf24" : "#f87171");
+  $("#ringv").textContent = pct.toFixed(0) + "%";
+  const by = f => [...r].sort(f)[0];
+  const hot = by((a, b) => b.rolling_avg - a.rolling_avg), cool = by((a, b) => a.rolling_avg - b.rolling_avg), rise = by((a, b) => b.delta - a.delta);
+  $("#i-hot").textContent = hot.truck_id + "  " + hot.rolling_avg.toFixed(1) + " °C";
+  $("#i-cool").textContent = cool.truck_id + "  " + cool.rolling_avg.toFixed(1) + " °C";
+  $("#i-rise").textContent = rise.delta > .05 ? rise.truck_id + "  +" + rise.delta.toFixed(2) : "No trucks rising";
+}
+function toasts(){
+  if (S.lastTh !== S.th) { S.over = null; S.lastTh = S.th; }
+  const cur = new Set(S.rows.filter(r => r.rolling_avg > S.th).map(r => r.truck_id));
+  if (S.over) {
+    let k = 0;
+    cur.forEach(id => {
+      if (!S.over.has(id) && k++ < 3) {
+        const r = S.rows.find(x => x.truck_id === id), el = document.createElement("div");
+        el.className = "toast"; el.textContent = id + " went over " + S.th + " °C (" + r.rolling_avg.toFixed(1) + " °C average)";
+        $("#toasts").appendChild(el); setTimeout(() => el.remove(), 6000);
+      }
+    });
+  }
+  S.over = cur;
+}
+if (window.THREE) init3d(); else $("#sec3d").style.display = "none";
 poll(); setInterval(poll, 2000);
 </script>
 </body>
