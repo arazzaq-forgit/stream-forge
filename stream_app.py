@@ -1,4 +1,4 @@
-"""
+""""
 stream_app.py — Stream Forge
 Real-Time Truck Telemetry Streaming Pipeline
 
@@ -24,7 +24,7 @@ Dashboard:
 
 Metrics:
     http://localhost:6066/metrics
-"""
+""""
 
 import time
 from datetime import datetime, timezone
