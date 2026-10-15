@@ -2,7 +2,7 @@
 verify_consumer.py — quick sanity check, not part of the Week 1 spec deliverables.
 
 Reads and prints a handful of messages from the topic so you can confirm the
-producer is actually working before building the Faust/Bytewax topology in Week 2.
+producer is actually working before building the Faust/Bytewax topology in the Week 2.
 
 Usage:
     python verify_consumer.py --max-messages 20
